@@ -1,0 +1,10 @@
+# Runtime
+fastapi==0.142.4
+uvicorn[standard]==0.54.0
+psycopg[binary]==3.3.6
+PyJWT==2.15.1
+python-dotenv==1.2.4
+
+# Tests
+pytest==9.1.1
+httpx2==2.13.1
