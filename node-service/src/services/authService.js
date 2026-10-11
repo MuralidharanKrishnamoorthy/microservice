@@ -14,8 +14,21 @@ async function register({ name, email, password }) {
       throw ApiError.badRequest('Invalid email format');
     }
 
+    // Same rules as frontend validatePassword; the client check can be bypassed.
     if (password.length < 8) {
       throw ApiError.badRequest('Password must be at least 8 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw ApiError.badRequest('Password must contain an uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      throw ApiError.badRequest('Password must contain a lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      throw ApiError.badRequest('Password must contain a number');
+    }
+    if (!/[^A-Za-z0-9\s]/.test(password)) {
+      throw ApiError.badRequest('Password must contain a special character (e.g. @ # $ !)');
     }
 
     const existing = await User.findOne({ where: { email } });

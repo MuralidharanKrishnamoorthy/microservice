@@ -4,7 +4,7 @@
   "description": "Main business API: auth, users, records (Express + Sequelize + PostgreSQL + Redis)",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --watch src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js"
   },

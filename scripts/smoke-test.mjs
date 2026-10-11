@@ -26,7 +26,7 @@ async function call(base, method, path, { token, body, origin = ORIGIN } = {}) {
 }
 
 const id = Date.now();
-const user = { name: 'Smoke Test', email: `smoke_${id}@example.com`, password: 'Password123' };
+const user = { name: 'Smoke Test', email: `smoke_${id}@example.com`, password: 'Password@123' };
 const record = { name: 'Jane Doe', email: 'jane@example.com', age: 40, department: 'Data', description: 'Analyst' };
 
 const nodeHealth = await call(NODE, 'GET', '/health');

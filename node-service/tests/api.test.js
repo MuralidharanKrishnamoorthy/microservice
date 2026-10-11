@@ -15,8 +15,8 @@ const sequelize = require('../src/config/database');
 const User = require('../src/models/User');
 
 const RUN_ID = Date.now();
-const userA = { name: 'Alice Test', email: `alice_${RUN_ID}@example.com`, password: 'Password123' };
-const userB = { name: 'Bob Test', email: `bob_${RUN_ID}@example.com`, password: 'Password456' };
+const userA = { name: 'Alice Test', email: `alice_${RUN_ID}@example.com`, password: 'Password@123' };
+const userB = { name: 'Bob Test', email: `bob_${RUN_ID}@example.com`, password: 'Password@456' };
 
 async function resetRateLimit() {
   const keys = await redis.keys('rate_limit:*');
@@ -80,7 +80,7 @@ describe('auth', () => {
   test('invalid email -> 400', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ name: 'X', email: 'not-an-email', password: 'Password123' });
+      .send({ name: 'X', email: 'not-an-email', password: 'Password@123' });
     assert.equal(res.status, 400);
   });
 
@@ -90,6 +90,21 @@ describe('auth', () => {
       .send({ name: 'X', email: 'short@example.com', password: 'short' });
     assert.equal(res.status, 400);
   });
+
+  for (const [label, password] of [
+    ['no uppercase', 'password@123'],
+    ['no lowercase', 'PASSWORD@123'],
+    ['no number', 'Password@abc'],
+    ['no special character', 'Password123'],
+  ]) {
+    test(`weak password (${label}) -> 400`, async () => {
+      await resetRateLimit();
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ name: 'X', email: `weak_${RUN_ID}@example.com`, password });
+      assert.equal(res.status, 400);
+    });
+  }
 
   test('login succeeds and JWT carries userId + email', async () => {
     await resetRateLimit();
@@ -110,7 +125,7 @@ describe('auth', () => {
   });
 
   test('unknown email -> 401 with the same message', async () => {
-    const res = await login({ email: `nobody_${RUN_ID}@example.com`, password: 'Password123' });
+    const res = await login({ email: `nobody_${RUN_ID}@example.com`, password: 'Password@123' });
     assert.equal(res.status, 401);
     assert.equal(res.body.message, 'Invalid email or password');
   });

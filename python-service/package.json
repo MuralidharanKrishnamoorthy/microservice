@@ -1,0 +1,9 @@
+{
+  "name": "python-service",
+  "private": true,
+  "description": "npm wrapper so `npm start` runs this FastAPI service like the Node projects",
+  "scripts": {
+    "start": ".venv\\Scripts\\python -m app.main",
+    "test": ".venv\\Scripts\\python -m pytest"
+  }
+}

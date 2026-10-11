@@ -10,3 +10,5 @@ export default defineConfig({
     strictPort: true, // CORS on both APIs allows exactly this origin
   },
 });
+// NOTE : I can convert to cors as well based on the requirements
+//port : Number(process.env.PORT) || 5173,

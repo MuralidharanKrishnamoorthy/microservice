@@ -21,10 +21,12 @@ export function validateRecord(values) {
   return errors;
 }
 
+// Same rules as node-service authService.register; keep both in sync.
 export function validatePassword(password) {
   if (password.length < 8) return 'Password must be at least 8 characters';
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    return 'Password must contain a letter and a number';
-  }
+  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain a lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain a number';
+  if (!/[^A-Za-z0-9\s]/.test(password)) return 'Password must contain a special character (e.g. @ # $ !)';
   return '';
 }

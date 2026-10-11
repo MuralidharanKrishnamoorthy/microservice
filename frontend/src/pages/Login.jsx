@@ -156,7 +156,7 @@ export default function Login() {
                 value={values.password}
                 onChange={handleChange('password')}
                 error={Boolean(errors.password)}
-                helperText={errors.password || (isRegister ? 'At least 8 characters with a letter and a number' : '')}
+                helperText={errors.password || (isRegister ? '8+ characters with uppercase, lowercase, number and special character' : '')}
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                 disabled={loading}
                 fullWidth
@@ -196,6 +196,9 @@ export default function Login() {
               type="button"
               onClick={() => {
                 setIsRegister((r) => !r);
+                // Fresh form per mode: don't carry login creds into register (or back).
+                setValues({ name: '', email: '', password: '' });
+                setShowPassword(false);
                 setErrors({});
                 setServerError(null);
               }}
