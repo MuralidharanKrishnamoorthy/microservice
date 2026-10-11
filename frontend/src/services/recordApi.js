@@ -10,3 +10,12 @@ export async function createRecord(record) {
   const { data } = await pythonApi.post('/api/records', record);
   return data.data;
 }
+
+export async function updateRecord(id, record) {
+  const { data } = await pythonApi.put(`/api/records/${id}`, record);
+  return data.data;
+}
+
+export async function deleteRecord(id) {
+  await pythonApi.delete(`/api/records/${id}`);
+}

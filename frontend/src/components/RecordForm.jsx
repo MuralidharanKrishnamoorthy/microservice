@@ -8,8 +8,19 @@ const EMPTY = { name: '', email: '', age: '', department: '', description: '' };
 
 // Two columns on desktop (md+), one stacked column on mobile — via Grid `size`.
 // The form clears itself after a successful save.
-export default function RecordForm({ onSave }) {
-  const [values, setValues] = useState(EMPTY);
+
+export default function RecordForm({ onSave, initialRecord = null, onCancel = null }) {
+  const [values, setValues] = useState(() =>
+    initialRecord
+      ? {
+          name: initialRecord.name,
+          email: initialRecord.email,
+          age: String(initialRecord.age),
+          department: initialRecord.department,
+          description: initialRecord.description || '',
+        }
+      : EMPTY
+  );
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -89,7 +100,12 @@ export default function RecordForm({ onSave }) {
         </Grid>
       </Grid>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+        {onCancel && (
+          <Button size="large" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+        )}
         <Button
           type="submit"
           variant="contained"
@@ -98,7 +114,7 @@ export default function RecordForm({ onSave }) {
           startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : null}
           style={{ width: isMobile ? '100%' : 'auto', minWidth: '140px' }}
         >
-          Save
+          {initialRecord ? 'Update' : 'Save'}
         </Button>
       </div>
     </form>

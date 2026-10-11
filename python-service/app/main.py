@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from psycopg.errors import ForeignKeyViolation
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -27,7 +28,7 @@ app = FastAPI(title="python-service", description="Records microservice", lifesp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.cors_origin],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -45,6 +46,12 @@ async def validation_error(request: Request, exc: RequestValidationError):
         field = ".".join(str(part) for part in err["loc"] if part != "body")
         messages.append(f"{field}: {err['msg']}" if field else err["msg"])
     return JSONResponse(status_code=400, content={"success": False, "message": "; ".join(messages)})
+
+
+# Valid token, but its user was deleted from users: the foreign key rejects the insert.
+@app.exception_handler(ForeignKeyViolation)
+async def unknown_user(request: Request, exc: ForeignKeyViolation):
+    return JSONResponse(status_code=401, content={"success": False, "message": "User no longer exists"})
 
 
 @app.exception_handler(Exception)

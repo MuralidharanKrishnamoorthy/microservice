@@ -27,3 +27,24 @@ def list_records(user_id: int) -> list[dict]:
     sql = f"SELECT {COLUMNS} FROM records WHERE user_id = %s ORDER BY created_at DESC, id DESC"
     with get_connection() as conn:
         return conn.execute(sql, (user_id,)).fetchall()
+
+
+def update_record(user_id: int, record_id: int, data: RecordCreate) -> dict | None:
+   
+    sql = f"""
+        UPDATE records
+        SET name = %s, email = %s, age = %s, department = %s, description = %s
+        WHERE id = %s AND user_id = %s
+        RETURNING {COLUMNS}
+    """
+    with get_connection() as conn:
+        return conn.execute(
+            sql,
+            (data.name, data.email, data.age, data.department, data.description, record_id, user_id),
+        ).fetchone()
+
+
+def delete_record(user_id: int, record_id: int) -> bool:
+    sql = "DELETE FROM records WHERE id = %s AND user_id = %s RETURNING id"
+    with get_connection() as conn:
+        return conn.execute(sql, (record_id, user_id)).fetchone() is not None

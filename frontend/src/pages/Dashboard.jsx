@@ -10,6 +10,11 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Paper,
   Table,
@@ -25,11 +30,13 @@ import {
 import { useTheme } from '@mui/material/styles';
 import AppsIcon from '@mui/icons-material/ViewQuilt';
 import LogoutIcon from '@mui/icons-material/Logout';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import RecordForm from '../components/RecordForm';
 import EmptyState from '../components/EmptyState';
 import { AuthContext } from '../context/AuthContext';
 import { NotificationContext } from '../context/NotificationContext';
-import { createRecord, listRecords } from '../services/recordApi';
+import { createRecord, deleteRecord, listRecords, updateRecord } from '../services/recordApi';
 import { getErrorMessage } from '../utils/errors';
 
 const formatDate = (iso) => new Date(iso).toLocaleString();
@@ -45,6 +52,9 @@ export default function Dashboard() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(null); // record shown in the form; null = new record
+  const [toDelete, setToDelete] = useState(null); // record awaiting delete confirmation
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch: GET /api/records on python-service.
   const load = useCallback(async () => {
@@ -79,6 +89,50 @@ export default function Dashboard() {
       throw new Error(getErrorMessage(err, 'Could not save record'));
     }
   };
+
+  // Update: PUT /api/records/:id on python-service.
+  const handleUpdateRecord = async (data) => {
+    try {
+      const updated = await updateRecord(editing.id, data);
+      setRecords((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
+      setEditing(null);
+      notify('Record updated');
+    } catch (err) {
+      throw new Error(getErrorMessage(err, 'Could not update record'));
+    }
+  };
+
+  const startEdit = (record) => {
+    setEditing(record);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Delete: DELETE /api/records/:id on python-service, after a confirm dialog.
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteRecord(toDelete.id);
+      setRecords((rs) => rs.filter((r) => r.id !== toDelete.id));
+      if (editing?.id === toDelete.id) setEditing(null);
+      notify('Record deleted');
+      setToDelete(null);
+    } catch (err) {
+      notify(getErrorMessage(err, 'Could not delete record'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const rowActions = (r) => (
+    <>
+      <IconButton aria-label={`Edit ${r.name}`} size="small" onClick={() => startEdit(r)}>
+        <EditIcon fontSize="small" />
+      </IconButton>
+      <IconButton aria-label={`Delete ${r.name}`} size="small" color="error" onClick={() => setToDelete(r)}>
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </>
+  );
 
   const hasRecords = !loading && !error && records.length > 0;
 
@@ -119,16 +173,25 @@ export default function Dashboard() {
         <Typography variant="h5" component="h1" style={{ marginBottom: '4px' }}>
           Hello, {user?.name?.split(' ')[0] || 'there'}
         </Typography>
-        <Typography variant="body2" color="text.secondary" style={{ marginBottom: '24px' }}>
+        {/* <Typography variant="body2" color="text.secondary" style={{ marginBottom: '24px' }}>
           Records are saved and fetched by the Python service, using the login token from the Node service.
-        </Typography>
+        </Typography> */}
 
         <Card style={{ marginBottom: '32px' }}>
           <CardContent style={{ padding: isTablet ? '24px' : '16px' }}>
             <Typography variant="h6" style={{ marginBottom: '16px' }}>
-              New record
+              {editing ? 'Edit record' : 'New record'}
             </Typography>
-            <RecordForm onSave={handleCreateRecord} />
+            {editing ? (
+              <RecordForm
+                key={editing.id}
+                initialRecord={editing}
+                onSave={handleUpdateRecord}
+                onCancel={() => setEditing(null)}
+              />
+            ) : (
+              <RecordForm key="new" onSave={handleCreateRecord} />
+            )}
           </CardContent>
         </Card>
 
@@ -176,6 +239,7 @@ export default function Dashboard() {
                   <TableCell>Department</TableCell>
                   <TableCell>Description</TableCell>
                   <TableCell>Created</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -194,6 +258,9 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell style={{ whiteSpace: 'nowrap', color: theme.palette.text.secondary }}>
                       {formatDate(r.createdAt)}
+                    </TableCell>
+                    <TableCell align="right" style={{ whiteSpace: 'nowrap' }}>
+                      {rowActions(r)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -227,15 +294,41 @@ export default function Dashboard() {
                       {r.description}
                     </Typography>
                   )}
-                  <Typography variant="caption" color="text.disabled" style={{ display: 'block', marginTop: '8px' }}>
-                    {formatDate(r.createdAt)}
-                  </Typography>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                    <Typography variant="caption" color="text.disabled">
+                      {formatDate(r.createdAt)}
+                    </Typography>
+                    <div>{rowActions(r)}</div>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
       </Container>
+
+      <Dialog open={Boolean(toDelete)} onClose={() => !deleting && setToDelete(null)}>
+        <DialogTitle>Delete record?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            "{toDelete?.name}" will be permanently deleted. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setToDelete(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={confirmDelete}
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

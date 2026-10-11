@@ -51,7 +51,7 @@ The project uses **one PostgreSQL database**, but every table has exactly **one 
 
 This is the **"shared database, table-per-service ownership"** pattern. The services stay independent in code and only share the database server. That means the database can be split later, for example by moving `records` to its own database, by changing only `python-service/.env`.
 
-There is deliberately **no foreign key** from `records.user_id` to `users.id`. A foreign key across service boundaries would couple their schemas and force a startup order. Ownership is guaranteed by the verified JWT instead.
+`records.user_id` has a **foreign key** to `users.id` with `ON DELETE CASCADE`: the database rejects a record for a user that does not exist, and deleting a user deletes their records. Because python-service references a table node-service creates, **start node-service before python-service** (python-service stops with a clear message if `users` is missing). Ownership of each record still comes from the verified JWT.
 
 ### Monorepo ≠ Monolith
 
@@ -126,7 +126,7 @@ Microservice/
 │       ├── main.py               # entry point: FastAPI app, creates records table, CORS, errors
 │       ├── config.py             # env settings
 │       ├── schemas.py            # Pydantic request validation
-│       ├── routes/               # records.py (POST/GET /api/records), health.py
+│       ├── routes/               # records.py (POST/GET/PUT/DELETE /api/records), health.py
 │       ├── middleware/auth.py    # JWT verification dependency
 │       ├── services/record_service.py
 │       └── database/connection.py
@@ -185,6 +185,8 @@ All responses use one shape: success `{ "success": true, "data": ... }`, error `
 | GET | `/health` | – | Checks PostgreSQL |
 | POST | `/api/records` | JWT | Save a record: `{ name, email, age, department, description? }` → 201 |
 | GET | `/api/records` | JWT | Fetch **your own** records, newest first |
+| PUT | `/api/records/:id` | JWT | Update **your own** record (same body as POST) → 200, or 404 if not yours / missing |
+| DELETE | `/api/records/:id` | JWT | Delete **your own** record → 200, or 404 if not yours / missing |
 | GET | `/docs` | – | FastAPI's built-in Swagger UI |
 
 Status codes: `400` bad input · `401` missing, invalid or expired token · `404` unknown route · `409` email already registered · `429` too many logins · `500` server error.
@@ -366,8 +368,8 @@ Each table has a single owner service, and no service reads or writes another se
 **How do the services communicate?**
 Only through the JWT. Node signs it, and Python verifies it with the same secret and a pinned algorithm. Python never calls Node, so there is no runtime coupling between them.
 
-**Why no foreign key from records to users?**
-A foreign key across a service boundary couples the schemas and forces a startup order. Ownership is enforced by the verified token. The trade-off is that deleting a user would need an event to clean up their records; see Known limitations.
+**Why a foreign key from records to users, across two services?**
+Both tables live in one shared database, so the database can enforce that every record belongs to a real user and cascade deletes. The cost is coupling: node-service must start first, and if `records` ever moves to its own database the foreign key has to be replaced by a "user deleted" event.
 
 **How does logout work?**
 The JWT is stateless, so the frontend deletes it. For instant server-side revocation, I would add a Redis blocklist of token IDs that both services check.
@@ -389,12 +391,12 @@ Sequelize is the ORM for Node's `users` model. Python's needs are two simple que
 ## 9. Known limitations (deliberately kept simple)
 
 * **Shared database server.** The ownership rules prevent coupling through the data, but both services still depend on one PostgreSQL instance. Production could give each service its own database.
-* **Orphaned records.** No foreign key and no user-deletion feature exist. If user deletion is added, Node should publish a "user deleted" event that Python handles.
+* **Cross-service foreign key.** `records.user_id` references `users.id`, which ties python-service to node-service's table and startup order. Splitting into separate databases would need a "user deleted" event instead.
 * **Schema creation on startup.** Sequelize `sync()` and Python's `CREATE TABLE IF NOT EXISTS` are used. Production needs versioned migrations.
 * **Shared HS256 secret.** Any service that can verify tokens could also forge them. RS256 (Node signs with a private key, Python verifies with the public key) removes that risk.
 * **Token handling.** The JWT is stored in `localStorage`, where XSS could read it; an httpOnly cookie is safer. There are no refresh tokens and no server-side revocation, so a token stays valid until it expires (4h).
 * **Rate limiter fails open.** If Redis is down, logins are allowed and the problem is logged, so an outage doesn't lock everyone out.
 * **Per-IP fixed window.** Users behind one NAT share a limit. Behind a reverse proxy, `app.set('trust proxy', …)` is needed.
 * **Windows Redis build.** `winget install Redis.Redis` ships Redis 3.0, an old but working port. The app uses only `INCR`, `EXPIRE` and `TTL`, so any version works.
-* **No pagination** on the records list. **No edit or delete** of records, by design for this scope.
+* **No pagination** on the records list. Edit and delete exist (PUT/DELETE `/api/records/:id`), scoped to the token owner.
 * **Python opens a new database connection per request.** It is simple; a connection pool is the production choice.

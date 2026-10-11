@@ -1,7 +1,7 @@
 """PostgreSQL access for python-service.
 
 The database is shared with node-service, but each table has ONE owner:
-  users   -> node-service   (python-service never reads or writes it)
+  users   -> node-service   (python-service only references users.id via a foreign key)
   records -> python-service (node-service never reads or writes it)
 """
 from contextlib import contextmanager
@@ -11,12 +11,10 @@ from psycopg.rows import dict_row
 
 from app.config import settings
 
-# No foreign key to users: that table belongs to node-service, and a cross-service
-# FK would force a startup order. Ownership comes from the verified JWT instead.
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS records (
     id          SERIAL PRIMARY KEY,
-    user_id     INTEGER      NOT NULL,
+    user_id     INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name        VARCHAR(100) NOT NULL,
     email       VARCHAR(255) NOT NULL,
     age         INTEGER      NOT NULL CHECK (age BETWEEN 18 AND 100),
@@ -25,6 +23,20 @@ CREATE TABLE IF NOT EXISTS records (
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS records_user_id_idx ON records (user_id);
+"""
+
+
+ADD_FK_SQL = """
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'records'::regclass AND contype = 'f'
+    ) THEN
+        ALTER TABLE records ADD CONSTRAINT records_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 """
 
 
@@ -38,6 +50,12 @@ def get_connection():
 def init_schema() -> None:
     """Create the records table on startup (python-service owns it)."""
     with get_connection() as conn:
+        users_table = conn.execute("SELECT to_regclass('users') AS t").fetchone()["t"]
+        if users_table is None:
+            raise RuntimeError(
+                'Table "users" not found. Start node-service first (it creates users), '
+                "then restart python-service."
+            )
         old_layout = conn.execute(
             "SELECT 1 FROM information_schema.columns "
             "WHERE table_name = 'records' AND column_name = 'userId'"
@@ -48,6 +66,7 @@ def init_schema() -> None:
                 "Drop it once (DROP TABLE records;) and restart python-service."
             )
         conn.execute(SCHEMA_SQL)
+        conn.execute(ADD_FK_SQL)
 
 
 def ping() -> bool:
